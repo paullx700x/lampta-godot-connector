@@ -1,0 +1,1 @@
+"""Lampta Godot Connector."""
