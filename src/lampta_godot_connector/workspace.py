@@ -25,7 +25,7 @@ class GodotProject:
         if not self.root.is_dir() or config.is_symlink() or not config.is_file():
             raise ProjectError('Expected a directory containing regular project.godot')
 
-    def _path(self, relative: str, write: bool = False) -> Path:
+    def _path(self, relative: str, write: bool = False, reference: bool = False) -> Path:
         if not isinstance(relative, str) or not relative or '\\' in relative or '\0' in relative:
             raise ProjectError('Invalid path')
         if relative.startswith('res://'):
@@ -35,7 +35,7 @@ class GodotProject:
             raise ProjectError('Path escapes project')
         if any(p.lower() in EXCLUDED for p in rel.parts):
             raise ProjectError('Private/generated folder denied')
-        if (write and rel.suffix.lower() not in TEXT_EXTS) or (not write and relative != 'project.godot' and rel.suffix.lower() not in TEXT_EXTS):
+        if (write and rel.suffix.lower() not in TEXT_EXTS) or (not write and not reference and relative != 'project.godot' and rel.suffix.lower() not in TEXT_EXTS):
             raise ProjectError('Unsupported file type')
         path = self.root
         for part in rel.parts:
@@ -102,6 +102,60 @@ class GodotProject:
         if len(nodes) > 500 or len(resources) > 500:
             raise ProjectError('Scene too complex for text inspection')
         return {'path': doc['path'], 'sha256': doc['sha256'], 'nodes': nodes, 'resources': resources}
+
+
+    def inspect_script(self, relative: str) -> dict:
+        """Summarize GDScript declarations without running the script."""
+        if not isinstance(relative, str) or not relative.lower().endswith('.gd'):
+            raise ProjectError('Expected .gd')
+        doc = self.read(relative)
+        content = doc['content']
+
+        def declaration(pattern: str) -> list[str]:
+            return re.findall(pattern, content, re.MULTILINE)
+
+        return {
+            'path': doc['path'],
+            'sha256': doc['sha256'],
+            'extends': next(iter(declaration(r'^\s*extends\s+(.+?)\s*$')), None),
+            'class_name': next(iter(declaration(r'^\s*class_name\s+([A-Za-z_]\w*)\b')), None),
+            'signals': declaration(r'^\s*signal\s+([A-Za-z_]\w*)\b'),
+            'functions': declaration(r'^\s*(?:static\s+)?func\s+([A-Za-z_]\w*)\s*\('),
+        }
+
+    def check_references(self, limit: int = 500) -> dict:
+        """Check res:// references in text scene/resource headers without loading scripts."""
+        if not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ProjectError('Limit must be 1–500')
+        listing = self.list_files(500)
+        candidates = [name for name in listing if name.lower().endswith(('.tscn', '.tres'))]
+        problems = []
+        scanned = 0
+        for relative in candidates[:limit]:
+            scanned += 1
+            try:
+                doc = self.read(relative)
+            except ProjectError as exc:
+                problems.append({'source': relative, 'error': str(exc)})
+                continue
+            for kind, raw in RESOURCE.findall(doc['content']):
+                if kind != 'ext_resource':
+                    continue
+                target = self._attrs(raw).get('path', '')
+                if not target.startswith('res://'):
+                    continue
+                try:
+                    path = self._path(target, reference=True)
+                    if not path.is_file():
+                        problems.append({'source': relative, 'target': target, 'error': 'missing'})
+                except ProjectError as exc:
+                    problems.append({'source': relative, 'target': target, 'error': str(exc)})
+        return {
+            'scanned_files': scanned,
+            'issues': problems[:500],
+            'truncated': len(candidates) > scanned or len(listing) == 500 or len(problems) > 500,
+            'scope': 'ext_resource res:// paths in inspected .tscn/.tres files',
+        }
 
     def write(self, relative: str, content: str, expected_sha256: str = '') -> dict:
         if os.environ.get('LAMPTA_GODOT_ALLOW_WRITE') != '1':

@@ -32,6 +32,16 @@ def godot_inspect_scene(relative_path: str) -> dict:
     return current_project().inspect_scene(relative_path)
 
 @mcp.tool()
+def godot_inspect_script(relative_path: str) -> dict:
+    """List GDScript class, parent, signals, and functions without running it."""
+    return current_project().inspect_script(relative_path)
+
+@mcp.tool()
+def godot_check_references(limit: int = 500) -> dict:
+    """Find missing or unsafe res:// external references in Godot text scenes/resources."""
+    return current_project().check_references(limit)
+
+@mcp.tool()
 def godot_write_gdscript(relative_path: str, content: str, expected_sha256: str = '') -> dict:
     """Write .gd with explicit opt-in; updates require SHA-256 from godot_read_file."""
     if not relative_path.lower().endswith('.gd'):

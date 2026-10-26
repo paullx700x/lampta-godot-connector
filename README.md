@@ -18,11 +18,13 @@ Developed from the Godot file workflow used in the Lampta ecosystem, this connec
 | `godot_list_files` | List `.gd`, `.tscn`, `.tres` and `project.godot` files |
 | `godot_read_file` | Read UTF-8 source content and its SHA-256 checksum |
 | `godot_inspect_scene` | Summarize `.tscn` node declarations and resource references |
+| `godot_inspect_script` | Inventory GDScript class, inheritance, signals and functions without executing code |
+| `godot_check_references` | Find missing or blocked `res://` dependencies in text scenes/resources |
 | `godot_write_gdscript` | Create or update GDScript with explicit write permission |
 | `godot_write_resource` | Create or update `.tscn` or `.tres` files with write permission |
 | `godot_validate_project` | Invoke a locally installed Godot editor in headless mode |
 
-Scenes remain native Godot text assets. Inspection is deliberately lightweight, **not a complete scene parser or Godot runtime interpreter**. The connector targets Godot 4.x, including the **Godot 4.7.2** workflow used by Lampta.
+Scenes remain native Godot text assets. Inspection is deliberately lightweight, **not a complete scene parser or Godot runtime interpreter**. Script inventory is text-based (it does not execute GDScript), and reference checks cover explicit `ext_resource` declarations with `res://` paths in scanned `.tscn`/`.tres` files. UID references, script-level dynamic loads, imported assets, game logic and export builds are outside that check. The connector targets Godot 4.x, including the **Godot 4.7.2** workflow used by Lampta.
 
 ## Requirements
 
@@ -96,7 +98,7 @@ python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
 
-The unit tests cover project metadata and scene inspection, path traversal, symlinks, file-size caps, write permission, revision conflicts, and editor discovery. A Godot installation is not needed to run them.
+The unit tests cover project metadata, scene/script inspection, reference checks, path traversal, symlinks, file-size caps, write permission, revision conflicts, and editor discovery. A Godot installation is not needed to run them.
 
 ## About Lampta AI
 
